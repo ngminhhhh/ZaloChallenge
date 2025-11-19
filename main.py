@@ -6,6 +6,8 @@ import numpy as np
 import torchvision.ops as ops
 import json
 
+from score import *
+
 def get_candidate_boxes(onehot_heatmap, prob_heatmap, min_area=50):
     onehot_heatmap_np = onehot_heatmap.squeeze(0).squeeze(0).detach().cpu().numpy().astype(np.uint8)
     prob_heatmap_np = prob_heatmap.squeeze(0).squeeze(0).detach().cpu().numpy().astype(np.uint8)
@@ -105,6 +107,7 @@ def process_video(video_id: str, video_path: str, frame_encoder, query_embs: tor
         if boxes.shape[0]:
             best_idx = scores.argmax()
             x1, y1, x2, y2 = boxes[best_idx]
+            x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
             results.append({
                 "frame": frame_idx, 
                 "x1": x1, 
@@ -125,15 +128,16 @@ def process_video(video_id: str, video_path: str, frame_encoder, query_embs: tor
 if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     dataloader = DataPrepare(root_dir="observing")
-    train_set = dataloader.prepare_train_data()
+    test_set = dataloader.prepare_train_data()
 
     image_encoder = CLIPEncoder(device=device)
     frame_encoder = YOLOv8mEncoder(device=device)
 
-    train_results = []
+    test_results = []
 
-    for sample in train_set:
+    for sample in test_set:
         video_id = sample["video_id"]
+        sample_annotation = dataloader.get_annotations_for_sample(video_id)
         query_images = sample["query_images"]
         query_video = sample["query_video"]
 
@@ -154,13 +158,13 @@ if __name__ == "__main__":
             ]
         }
 
-        with open(f'./train_prediction/{video_id}.json', 'w', encoding='utf-8') as f:
+        with open(f'./test_prediction/{video_id}.json', 'w', encoding='utf-8') as f:
             json.dump(sample_detection, f, ensure_ascii=False, indent=4)
 
-        train_results.append(sample_detection)
+        test_results.append(sample_detection)
 
-    with open('./train_prediction/train_prediction.json', 'w', encoding='utf-8') as f:
-        json.dump(train_results, f, ensure_ascii=False, indent=4)
+    with open('./test_prediction/test_prediction.json', 'w', encoding='utf-8') as f:
+        json.dump(test_results, f, ensure_ascii=False, indent=4)
 
 
 
