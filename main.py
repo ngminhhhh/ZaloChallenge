@@ -1,22 +1,12 @@
-from DataPrepare import *
 from model.LTS import *
-import json
+from DataPrepare import DataPrepare
+from tqdm import tqdm
+import cv2
 
-def process_video(frame_encoder, image_encoder, match_head, video_path: str, support_images: List[str]):
-    match_head.eval()
-    # * Support img embeddings
-    support_feats = []
-    for img_path in support_images:
-        img = Image.open(img_path).convert('RGB')
-        emb = image_encoder.extract_features(img, is_normalized=False)
-        support_feats.append(emb)
-
-    support_feats = torch.cat(support_feats, dim=0)
-    support_embeddings = support_feats.unsqueeze(0)
-
+def process_video(video_id: str, video_path: str, frame_encoder, query_embs: torch.Tensor):
     cap = cv2.VideoCapture(video_path)
 
-    # * Video property
+    # * video properties
     fps = cap.get(cv2.CAP_PROP_FPS)
     width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
     height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
@@ -25,20 +15,23 @@ def process_video(frame_encoder, image_encoder, match_head, video_path: str, sup
     results = []
     frame_idx = 0
 
+    # * Process bar 
     process_bar = tqdm(total=n_frames)
 
     # * Iterate video
     while cap.isOpened():
         ret, frame = cap.read()
+
         if not ret: break
 
-        P3, _, _ = frame_encoder.extract_feature_map(frame)
-        P3 = P3.clone()
-        heatmap = match_head.forward(P3, support_embeddings)
+        P3, P4, P5 = frame_encoder.extract_feature_map(frame)
+        P3, P4, P5 = P3.clone(), P4.clone(), P5.clone()
 
-        print(heatmap)
+        feature_map = frame_encoder.fusion_feature_map(P3, P4, P5)
 
-        frame_idx +=1 
+        print(f"Feature_maps shape: {feature_map.shape}")
+
+        frame_idx += 1
         process_bar.update(1)
 
     process_bar.close()
@@ -46,18 +39,28 @@ def process_video(frame_encoder, image_encoder, match_head, video_path: str, sup
 
     return results
 
+
 if __name__ == "__main__":
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     dataloader = DataPrepare(root_dir="observing")
-
-    frame_encoder = YOLOv8FeatureExtractor() 
-    image_encoder = DINOv2FeatureExtractor()
-    match_head = MatchHead()
-
     train_set = dataloader.prepare_train_data()
+
+    image_encoder = CLIPEncoder(device=device)
+    frame_encoder = YOLOv8mEncoder(device=device)
 
     for sample in train_set:
         video_id = sample["video_id"]
-        support_images = sample["support_images"]
+        query_images = sample["query_images"]
         query_video = sample["query_video"]
 
-        process_video(frame_encoder, image_encoder, match_head, query_video, support_images)
+        # * Query embedding
+        query_embs = []
+        for img_path in query_images:
+            query_embs.append(image_encoder.extract_features(image_path=img_path))
+        query_embs = torch.cat(query_embs, dim=0).unsqueeze(0)
+        
+        process_video(video_id=video_id, video_path=query_video, frame_encoder=frame_encoder, query_embs=query_embs)
+
+        break
+
+

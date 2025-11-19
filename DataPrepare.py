@@ -45,8 +45,8 @@ class DataPrepare:
             query_video = self.get_query_video(self.train_dir, folder)
             sample = {
                 'video_id': folder,
-                'support_images': support_images,
-                'num_support_images': len(support_images),
+                'query_images': support_images,
+                'num_query_images': len(support_images),
                 'query_video': query_video
             }
 
