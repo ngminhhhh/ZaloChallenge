@@ -35,12 +35,10 @@ class YOLOv8mEncoder:
 
         self.hook_handle = self.detect_layer.register_forward_hook(hook)
 
-        self.projector = nn.Conv2d(
-            in_channels=144*3, 
-            out_channels=512,
-            kernel_size=1,
-            stride=1,
-            padding=0
+        self.projector = nn.Sequential(
+            nn.Conv2d(144*3, 512, kernel_size=1, stride=1, padding=0),
+            nn.BatchNorm2d(512),
+            nn.ReLU()
         ).to(device)
 
     def extract_feature_map(self, frame):
